@@ -52,10 +52,15 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	outputSize := outputJSON.Get("size").MustInt()
+	if len(img) != outputSize {
+		log.Fatalln("图片下载失败, 文件大小不一致")
+	}
+
 	err = ioutil.WriteFile(*filename, img, 0666)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	log.Println("图片保存成功")
-	log.Printf("图片类型: %s, 原始图片大小: %d, 压缩后图片大小: %d, 压缩比率: %f\n", outputJSON.Get("type").MustString(), json.GetPath("input", "size").MustInt(), outputJSON.Get("size").MustInt(), outputJSON.Get("ratio").MustFloat64())
+	log.Printf("图片类型: %s, 原始图片大小: %d, 压缩后图片大小: %d, 压缩比率: %f\n", outputJSON.Get("type").MustString(), json.GetPath("input", "size").MustInt(), outputSize, outputJSON.Get("ratio").MustFloat64())
 }
