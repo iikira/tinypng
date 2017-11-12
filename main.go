@@ -23,31 +23,46 @@ func main() {
 	}
 
 	for k := range flag.Args() {
-		do(flag.Arg(k))
+	for_1:
+		for errTimes := 0; errTimes < 3; errTimes++ {
+			code := do(flag.Arg(k))
+
+			switch code {
+			case 0:
+				fallthrough
+			case 1: // 系统错误
+				break for_1
+			case 2: // 网络错误
+				fallthrough
+			case 3: // json 解析错误
+				continue
+			}
+		}
 	}
 
 }
 
-func do(filename string) {
-	log.Printf("正在上传图片 %s\n", filename)
+func do(filename string) (code int) {
+	log.Printf("[%s] 正在上传图片\n", filename)
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		log.Println(err)
-		return
+		return 1
 	}
 
 	imgJSON, err := baiduUtil.Fetch("POST", "https://tinypng.com/web/shrink", nil, data, map[string]string{
-		"Content-Type": "application/x-www-form-urlencoded",
+		// "Content-Type": "application/x-www-form-urlencoded",
+		"Content-Encoding": "gzip",
 	})
 	if err != nil {
 		log.Println(err)
-		return
+		return 2
 	}
 
 	json, err := simplejson.NewJson(imgJSON)
 	if err != nil {
 		log.Println(err)
-		return
+		return 3
 	}
 
 	if j, ok := json.CheckGet("error"); ok {
@@ -57,24 +72,24 @@ func do(filename string) {
 	outputJSON := json.Get("output")
 	url := outputJSON.Get("url").MustString()
 
-	log.Println("上传图片成功, 正在下载压缩后的图片...")
+	log.Printf("[%s] 上传图片成功, 正在下载压缩后的图片...\n", filename)
 	img, err := baiduUtil.Fetch("GET", url, nil, nil, nil)
 	if err != nil {
 		log.Println(err)
-		return
+		return 2
 	}
 
-	outputSize := outputJSON.Get("size").MustInt()
-	if len(img) != outputSize {
-		log.Println("图片下载失败, 文件大小不一致")
-		return
+	outputSize := outputJSON.Get("size").MustFloat64()
+	if len(img) != int(outputSize) {
+		log.Printf("[%s] 图片下载失败, 文件大小不一致\n", filename)
+		return 2
 	}
 
 	err = ioutil.WriteFile(filename, img, 0666)
 	if err != nil {
 		log.Println(err)
-		return
+		return 1
 	}
-	log.Println("图片保存成功")
-	log.Printf("图片类型: %s, 原始图片大小: %d, 压缩后图片大小: %d, 压缩比率: %f\n", outputJSON.Get("type").MustString(), json.GetPath("input", "size").MustInt(), outputSize, outputJSON.Get("ratio").MustFloat64())
+	log.Printf("[%s] 图片保存成功, 图片类型: %s, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f\n", filename, outputJSON.Get("type").MustString(), convertSize(json.GetPath("input", "size").MustFloat64()), convertSize(outputSize), outputJSON.Get("ratio").MustFloat64())
+	return 0
 }
