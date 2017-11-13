@@ -7,6 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
+)
+
+var (
+	isOverWrite = flag.Bool("w", false, "over write mode")
 )
 
 func init() {
@@ -66,7 +71,7 @@ func do(filename string) (code int) {
 	}
 
 	if j, ok := json.CheckGet("error"); ok {
-		log.Fatalln(j.MustString(), ":", json.Get("message").MustString())
+		log.Printf("[%s] Error, %s: %s\n", filename, j.MustString(), json.Get("message").MustString())
 	}
 
 	outputJSON := json.Get("output")
@@ -85,11 +90,17 @@ func do(filename string) (code int) {
 		return 2
 	}
 
-	err = ioutil.WriteFile(filename, img, 0666)
+	var newName string
+	if *isOverWrite {
+		newName = filename
+	} else {
+		newName = filepath.Dir(filename) + "/tinified-" + filepath.Base(filename)
+	}
+	err = ioutil.WriteFile(newName, img, 0666)
 	if err != nil {
 		log.Println(err)
 		return 1
 	}
-	log.Printf("[%s] 图片保存成功, 图片类型: %s, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f\n", filename, outputJSON.Get("type").MustString(), convertSize(json.GetPath("input", "size").MustFloat64()), convertSize(outputSize), outputJSON.Get("ratio").MustFloat64())
+	log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f\n", filename, newName, outputJSON.Get("type").MustString(), convertSize(json.GetPath("input", "size").MustFloat64()), convertSize(outputSize), outputJSON.Get("ratio").MustFloat64())
 	return 0
 }

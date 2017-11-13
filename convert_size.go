@@ -30,7 +30,7 @@ func convertSize(size float64) string {
 		return fmt.Sprintf("%fGB", size/gb)
 	}
 	if size < pb {
-		return fmt.Sprintf("%fGB", size/tb)
+		return fmt.Sprintf("%fTB", size/tb)
 	}
-	return fmt.Sprintf("%fTB", size/pb)
+	return fmt.Sprintf("%fPB", size/pb)
 }
