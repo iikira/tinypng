@@ -72,6 +72,7 @@ func do(filename string) (code int) {
 
 	if j, ok := json.CheckGet("error"); ok {
 		log.Printf("[%s] Error, %s: %s\n", filename, j.MustString(), json.Get("message").MustString())
+		return 1
 	}
 
 	outputJSON := json.Get("output")
