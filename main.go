@@ -101,6 +101,6 @@ func do(filename string) (code int) {
 		log.Println(err)
 		return 1
 	}
-	log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f\n", filename, newName, outputJSON.Get("type").MustString(), convertSize(json.GetPath("input", "size").MustFloat64()), convertSize(outputSize), outputJSON.Get("ratio").MustFloat64())
+	log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, newName, outputJSON.Get("type").MustString(), convertSize(json.GetPath("input", "size").MustFloat64()), convertSize(outputSize), outputJSON.Get("ratio").MustFloat64()*100)
 	return 0
 }
