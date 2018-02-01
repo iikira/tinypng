@@ -1,28 +1,44 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
-	"github.com/bitly/go-simplejson"
-	"github.com/iikira/baidu-tools/util"
+	"fmt"
+	"github.com/iikira/BaiduPCS-Go/pcsutil"
+	"github.com/iikira/BaiduPCS-Go/requester"
+	"github.com/iikira/BaiduPCS-Go/uploader"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 )
 
+const (
+	Version = "v1.0"
+)
+
 var (
-	isOverWrite = flag.Bool("w", false, "over write mode")
+	isOverWrite  = false
+	printVersion = false
 )
 
 func init() {
+	flag.BoolVar(&isOverWrite, "w", false, "overwrite")
+	flag.BoolVar(&printVersion, "v", false, "print version")
+
 	flag.Parse()
-	baiduUtil.SetLogPrefix()
-	baiduUtil.SetTimeout(3e11)
+
+	if printVersion {
+		fmt.Printf("TinyPNG client, Version %s\n", Version)
+		fmt.Println("Copyright (c) 2017-2018, iikira/tinypng: https://github.com/iikira/tinypng")
+		os.Exit(0)
+	}
+	pcsutil.SetLogPrefix()
 }
 
 func main() {
 	if len(os.Args) <= 1 {
-		log.Println("请输入参数")
 		flag.Usage()
 		return
 	}
@@ -44,64 +60,108 @@ func main() {
 			}
 		}
 	}
+}
 
+type UploadedData struct {
+	Input   InputData  `json:"input"`
+	Output  OutputData `json:"output"`
+	Error   string     `json:"error"`
+	Message string     `json:"message"`
+}
+
+type InputData struct {
+	Size int64  `json:"size"`
+	Type string `json:"type"`
+}
+
+type OutputData struct {
+	InputData
+	Width  uint    `json:"width"`
+	Height uint    `json:"height"`
+	Ratio  float64 `json:"ratio"`
+	URL    string  `json:"url"`
 }
 
 func do(filename string) (code int) {
 	log.Printf("[%s] 正在上传图片\n", filename)
-	data, err := ioutil.ReadFile(filename)
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
 		log.Println(err)
 		return 1
 	}
 
-	imgJSON, err := baiduUtil.Fetch("POST", "https://tinypng.com/web/shrink", nil, data, map[string]string{
-		// "Content-Type": "application/x-www-form-urlencoded",
-		"Content-Encoding": "gzip",
+	// 保留权限
+	mode := os.FileMode(0666)
+	info, err := file.Stat()
+	if err == nil {
+		mode = info.Mode()
+	}
+
+	uploader.DoUpload("https://tinypng.com/web/shrink", false, uploader.NewFileReaderLen(file), func(resp *http.Response, err error) {
+		file.Close()
+		fmt.Println()
+
+		if err != nil {
+			log.Println(err)
+			code = 2
+			return
+		}
+
+		imgJSON, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println(err)
+			code = 1
+			return
+		}
+
+		resp.Body.Close()
+
+		data := new(UploadedData)
+
+		err = json.Unmarshal(imgJSON, data)
+		if err != nil {
+			log.Println(err)
+			code = 3
+			return
+		}
+
+		if data.Error != "" {
+			log.Printf("[%s] Error, %s: %s\n", filename, data.Error, data.Message)
+			code = 1
+			return
+		}
+
+		log.Printf("[%s] 上传图片成功, 正在下载压缩后的图片...\n", filename)
+
+		img, err := requester.DefaultClient.Fetch("GET", data.Output.URL, nil, nil)
+		if err != nil {
+			log.Println(err)
+			code = 2
+			return
+		}
+
+		imgLen := int64(len(img))
+		if imgLen != data.Output.Size {
+			log.Printf("[%s] 图片下载失败, 文件大小不一致, 已下载: %d, 远程: %d\n", filename, imgLen, data.Output.Size)
+			code = 2
+			return
+		}
+
+		var newName string
+		if isOverWrite {
+			newName = filename
+		} else {
+			newName = filepath.Dir(filename) + string(os.PathSeparator) + "tinified-" + filepath.Base(filename)
+		}
+
+		err = ioutil.WriteFile(newName, img, mode)
+		if err != nil {
+			log.Println(err)
+			code = 1
+			return
+		}
+		log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 图片宽度: %d, 图片高度: %d, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, newName, data.Output.Type, data.Output.Width, data.Output.Height, pcsutil.ConvertFileSize(data.Input.Size), pcsutil.ConvertFileSize(data.Output.Size), data.Output.Ratio*100)
 	})
-	if err != nil {
-		log.Println(err)
-		return 2
-	}
 
-	json, err := simplejson.NewJson(imgJSON)
-	if err != nil {
-		log.Println(err)
-		return 3
-	}
-
-	if j, ok := json.CheckGet("error"); ok {
-		log.Printf("[%s] Error, %s: %s\n", filename, j.MustString(), json.Get("message").MustString())
-		return 1
-	}
-
-	outputJSON := json.Get("output")
-	url := outputJSON.Get("url").MustString()
-
-	log.Printf("[%s] 上传图片成功, 正在下载压缩后的图片...\n", filename)
-	img, err := baiduUtil.Fetch("GET", url, nil, nil, nil)
-	if err != nil {
-		log.Println(err)
-		return 2
-	}
-
-	outputSize := outputJSON.Get("size").MustFloat64()
-	if len(img) != int(outputSize) {
-		log.Printf("[%s] 图片下载失败, 文件大小不一致\n", filename)
-		return 2
-	}
-
-	var newName string
-	if *isOverWrite {
-		newName = filename
-	} else {
-		newName = filepath.Dir(filename) + "/tinified-" + filepath.Base(filename)
-	}
-	err = ioutil.WriteFile(newName, img, 0666)
-	if err != nil {
-		log.Println(err)
-		return 1
-	}
-	log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, newName, outputJSON.Get("type").MustString(), convertSize(json.GetPath("input", "size").MustFloat64()), convertSize(outputSize), outputJSON.Get("ratio").MustFloat64()*100)
-	return 0
+	return code
 }
