@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/iikira/BaiduPCS-Go/pcsutil"
 	"github.com/iikira/BaiduPCS-Go/requester"
+	"github.com/iikira/BaiduPCS-Go/requester/multipartreader"
 	"github.com/iikira/BaiduPCS-Go/uploader"
 	"io/ioutil"
 	"log"
@@ -15,6 +16,7 @@ import (
 )
 
 const (
+	// Version 版本号
 	Version = "v1.0"
 )
 
@@ -97,7 +99,7 @@ func do(filename string) (code int) {
 		mode = info.Mode()
 	}
 
-	uploader.DoUpload("https://tinypng.com/web/shrink", false, uploader.NewFileReaderLen(file), func(resp *http.Response, err error) {
+	uploader.DoUpload("https://tinypng.com/web/shrink", multipartreader.NewFileReadedLen64(file), nil, func(resp *http.Response, err error) {
 		file.Close()
 		fmt.Println()
 
@@ -133,7 +135,7 @@ func do(filename string) (code int) {
 
 		log.Printf("[%s] 上传图片成功, 正在下载压缩后的图片...\n", filename)
 
-		img, err := requester.DefaultClient.Fetch("GET", data.Output.URL, nil, nil)
+		img, err := requester.Fetch("GET", data.Output.URL, nil, nil)
 		if err != nil {
 			log.Println(err)
 			code = 2
@@ -160,6 +162,7 @@ func do(filename string) (code int) {
 			code = 1
 			return
 		}
+
 		log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 图片宽度: %d, 图片高度: %d, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, newName, data.Output.Type, data.Output.Width, data.Output.Height, pcsutil.ConvertFileSize(data.Input.Size), pcsutil.ConvertFileSize(data.Output.Size), data.Output.Ratio*100)
 	})
 
