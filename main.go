@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/iikira/BaiduPCS-Go/pcsutil"
 	"github.com/iikira/BaiduPCS-Go/requester"
-	"github.com/iikira/BaiduPCS-Go/requester/multipartreader"
-	"github.com/iikira/BaiduPCS-Go/uploader"
+	"github.com/iikira/BaiduPCS-Go/requester/rio"
+	"github.com/iikira/BaiduPCS-Go/requester/uploader"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -23,11 +23,13 @@ const (
 var (
 	isOverWrite  = false
 	printVersion = false
+	outputDir    string
 )
 
 func init() {
 	flag.BoolVar(&isOverWrite, "w", false, "overwrite")
 	flag.BoolVar(&printVersion, "v", false, "print version")
+	flag.StringVar(&outputDir, "o", ".", "output directory")
 
 	flag.Parse()
 
@@ -85,6 +87,18 @@ type OutputData struct {
 }
 
 func do(filename string) (code int) {
+	var savePath string
+	if isOverWrite {
+		savePath = filename
+	} else {
+		savePath = filepath.Clean(outputDir + string(os.PathSeparator) + filepath.Dir(filename) + string(os.PathSeparator) + "tinified-" + filepath.Base(filename))
+		_, err := os.Stat(savePath)
+		if err == nil { // 文件已存在
+			log.Printf("[%s] 已存在\n", savePath)
+			return 1
+		}
+	}
+
 	log.Printf("[%s] 正在上传图片\n", filename)
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
@@ -99,7 +113,7 @@ func do(filename string) (code int) {
 		mode = info.Mode()
 	}
 
-	uploader.DoUpload("https://tinypng.com/web/shrink", multipartreader.NewFileReadedLen64(file), nil, func(resp *http.Response, err error) {
+	uploader.DoUpload("https://tinypng.com/web/shrink", rio.NewFileReaderLen64(file), func(resp *http.Response, err error) {
 		file.Close()
 		fmt.Println()
 
@@ -149,21 +163,14 @@ func do(filename string) (code int) {
 			return
 		}
 
-		var newName string
-		if isOverWrite {
-			newName = filename
-		} else {
-			newName = filepath.Dir(filename) + string(os.PathSeparator) + "tinified-" + filepath.Base(filename)
-		}
-
-		err = ioutil.WriteFile(newName, img, mode)
+		err = ioutil.WriteFile(savePath, img, mode)
 		if err != nil {
 			log.Println(err)
 			code = 1
 			return
 		}
 
-		log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 图片宽度: %d, 图片高度: %d, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, newName, data.Output.Type, data.Output.Width, data.Output.Height, pcsutil.ConvertFileSize(data.Input.Size), pcsutil.ConvertFileSize(data.Output.Size), data.Output.Ratio*100)
+		log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 图片宽度: %d, 图片高度: %d, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, savePath, data.Output.Type, data.Output.Width, data.Output.Height, pcsutil.ConvertFileSize(data.Input.Size), pcsutil.ConvertFileSize(data.Output.Size), data.Output.Ratio*100)
 	})
 
 	return code
