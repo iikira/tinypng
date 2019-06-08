@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/iikira/BaiduPCS-Go/pcsutil"
+	"github.com/iikira/BaiduPCS-Go/pcsutil/converter"
 	"github.com/iikira/BaiduPCS-Go/requester"
 	"github.com/iikira/BaiduPCS-Go/requester/rio"
 	"github.com/iikira/BaiduPCS-Go/requester/uploader"
@@ -170,7 +171,7 @@ func do(filename string) (code int) {
 			return
 		}
 
-		log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 图片宽度: %d, 图片高度: %d, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, savePath, data.Output.Type, data.Output.Width, data.Output.Height, pcsutil.ConvertFileSize(data.Input.Size), pcsutil.ConvertFileSize(data.Output.Size), data.Output.Ratio*100)
+		log.Printf("[%s] 图片保存成功, 保存位置: %s, 图片类型: %s, 图片宽度: %d, 图片高度: %d, 原始图片大小: %s, 压缩后图片大小: %s, 压缩比率: %f%%\n", filename, savePath, data.Output.Type, data.Output.Width, data.Output.Height, converter.ConvertFileSize(data.Input.Size), converter.ConvertFileSize(data.Output.Size), data.Output.Ratio*100)
 	})
 
 	return code
